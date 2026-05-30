@@ -8,11 +8,11 @@ Parameters:
     Default: 'kdakou'
   BucketName:
     Type: String
-    Description: 'S3 bucket name'
+    Description: 'S3 bucket name (e.g. votre identifiant sans le learnaws + -bucket pour différencier du bucket de votre voisin)'
     Default: 's3-bucket-trigger-lambda'
 
 Resources:
-  # Rôle IAM pour la fonction Lambda
+# Rôle IAM pour la fonction Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -30,15 +30,21 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Effect: Deny
                 Action: [s3:GetObject, s3:PutObject]
                 Resource: !Sub 'arn:aws:s3:::${Environment}-${BucketName}/*'
+                # Resource: !GetAtt S3Bucket.Arn
+
+                # Ecrire dand la base de données
               - Effect: Allow
-                Action: [dynamodb:PutItem, dynamodb:GetItem]
-                Resource: '*'
+                Action: [
+                    dynamodb:PutItem,
+                    dynamodb:GetItem
+                ]
+                Resource: 'arn:aws:dynamodb:*:*:table/s3-trigger-db'
 
   # Fonction Lambda
-  LambdaTrigger:
+  LambdaTigger:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-lambda-trigger'
@@ -46,22 +52,65 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.12
       Code: ../src
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: 's3-trigger-db'
+          LEARNER_IDENTIFIER: !Sub '${Environment}'
 
-  # PERMISSION: Autoriser S3 à invoquer Lambda (AJOUTER CETTE SECTION)
-  LambdaInvokePermission:
+  LambdaPermissionsForS3:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref LambdaTrigger
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
+      FunctionName: !Ref LambdaTigger
+      Action: 'lambda:InvokeFunction'
+      Principal: 's3.amazonaws.com'
       SourceArn: !Sub 'arn:aws:s3:::${Environment}-${BucketName}'
 
-  # S3 bucket
+  # S3 bucket pour stocker les fichier
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '${Environment}-${BucketName}'
       NotificationConfiguration:
         LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt LambdaTrigger.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.jpg'
+            Function: !GetAtt LambdaTigger.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.jpeg'
+            Function: !GetAtt LambdaTigger.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.png'
+            Function: !GetAtt LambdaTigger.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.gif'
+            Function: !GetAtt LambdaTigger.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.bmp'
+            Function: !GetAtt LambdaTigger.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.webp'
+            Function: !GetAtt LambdaTigger.Arn
