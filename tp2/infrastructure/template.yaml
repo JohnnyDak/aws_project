@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2012-10-17'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TP AWS Lambda - Code charge depuis src/main.py'
 
 Parameters:
@@ -8,11 +8,11 @@ Parameters:
     Default: 'kdakou'
   BucketName:
     Type: String
-    Description: 'S3 bucket name (e.g. votre identifiant sans le learnaws + -bucket pour différencier du bucket de votre voisin)'
+    Description: 'S3 bucket name'
     Default: 's3-bucket-trigger-lambda'
 
 Resources:
-# Rôle IAM pour la fonction Lambda
+  # Rôle IAM pour la fonction Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -30,21 +30,15 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Deny
+              - Effect: Allow
                 Action: [s3:GetObject, s3:PutObject]
                 Resource: !Sub 'arn:aws:s3:::${Environment}-${BucketName}/*'
-                # Resource: !GetAtt S3Bucket.Arn
-
-                # Ecrire dand la base de données
               - Effect: Allow
-                Action: [
-                    dynamodb:PutItem,
-                    dynamodb:GetItem
-                ]
-                Resoure:
+                Action: [dynamodb:PutItem, dynamodb:GetItem]
+                Resource: '*'
 
   # Fonction Lambda
-  LambdaTigger:
+  LambdaTrigger:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-lambda-trigger'
@@ -53,12 +47,21 @@ Resources:
       Runtime: python3.12
       Code: ../src
 
-  # S3 bucket pour stocker les fichier 
+  # PERMISSION: Autoriser S3 à invoquer Lambda (AJOUTER CETTE SECTION)
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaTrigger
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${Environment}-${BucketName}'
+
+  # S3 bucket
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !sub '${Environment}-${BucketName}'
+      BucketName: !Sub '${Environment}-${BucketName}'
       NotificationConfiguration:
         LambdaConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            Function: !GetAtt LambdaFunction.Arn
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt LambdaTrigger.Arn
